@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -8,6 +8,11 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+useEffect(() => {
+  setTimeout(() => setVisible(true), 50);
+}, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -36,7 +41,12 @@ export default function LoginPage() {
           style={{ background: "radial-gradient(circle, #fff 0%, transparent 70%)", animation: "pulse 4s ease-in-out infinite 2s" }} />
       </div>
 
-      <div className="w-full max-w-md relative">
+      <div className="w-full max-w-md relative"
+  style={{
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateX(0)" : "translateX(-60px)",
+    transition: "opacity 0.5s ease, transform 0.5s ease",
+  }}>
 
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
