@@ -33,15 +33,10 @@ export default function PlannerPage() {
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm p-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">AI Study Planner</h1>
-            <p className="text-slate-500 mt-1">Auto-generated study schedule based on your tasks</p>
+            <h1 className="text-2xl font-bold text-slate-800" style={{color: "inherit"}}>AI Study Planner</h1>
+<p className="text-slate-500 mt-1" style={{opacity: 0.8}}>Auto-generated study schedule based on your tasks</p>
           </div>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
-          >
-            Dashboard
-          </button>
+          
         </div>
 
         {/* Settings */}
@@ -50,7 +45,7 @@ export default function PlannerPage() {
           <div className="flex items-center gap-4">
             <div className="flex-1">
               <label className="text-sm text-slate-600 mb-1 block">
-                Available study hours per day: <span className="font-bold text-slate-900">{hours} hours</span>
+                Available study hours per day: <span className="font-bold text-[#4F8CFF]">{hours} hours</span>
               </label>
               <input
                 type="range"
@@ -58,7 +53,7 @@ export default function PlannerPage() {
                 max="12"
                 value={hours}
                 onChange={(e) => setHours(parseInt(e.target.value))}
-                className="w-full accent-slate-800"
+                className="w-full accent-[#4F8CFF]"
               />
               <div className="flex justify-between text-xs text-slate-400 mt-1">
                 <span>1 hr</span>
