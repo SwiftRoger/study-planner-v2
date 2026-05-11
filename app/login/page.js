@@ -79,7 +79,7 @@ useEffect(() => {
             <div>
               <label className="text-sm font-medium text-slate-600 mb-1 block">Email</label>
               <input
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#4F8CFF] focus:border-transparent bg-slate-50 focus:bg-white"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800  text-sm outline-none focus:ring-2 focus:ring-[#4F8CFF] focus:border-transparent bg-slate-50 focus:bg-white"
                 style={{ transition: "all 0.2s ease" }}
                 placeholder="Enter your email"
                 type="email"
@@ -91,7 +91,7 @@ useEffect(() => {
             <div>
               <label className="text-sm font-medium text-slate-600 mb-1 block">Password</label>
               <input
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#4F8CFF] focus:border-transparent bg-slate-50 focus:bg-white"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm outline-none focus:ring-2 focus:ring-[#4F8CFF] focus:border-transparent bg-slate-50 focus:bg-white"
                 style={{ transition: "all 0.2s ease" }}
                 placeholder="Enter your password"
                 type="password"
