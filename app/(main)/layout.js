@@ -15,19 +15,56 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
+function TopLoadingBar() {
+  const pathname = usePathname();
+  const [width, setWidth] = useState(0);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(true);
+    setWidth(0);
+    const t1 = setTimeout(() => setWidth(30), 10);
+    const t2 = setTimeout(() => setWidth(70), 200);
+    const t3 = setTimeout(() => setWidth(100), 500);
+    const t4 = setTimeout(() => setVisible(false), 700);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
+  }, [pathname]);
+
+  if (!visible) return null;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[100] h-1">
+      <div
+        className="h-full rounded-full transition-all ease-out"
+        style={{
+          width: `${width}%`,
+          background: "linear-gradient(90deg, #4F8CFF, #a8edea, #667eea)",
+          duration: "300ms",
+          boxShadow: "0 0 10px #4F8CFF88",
+        }}
+      />
+    </div>
+  );
+}
+
 function PageWrapper({ children }) {
   const pathname = usePathname();
   const [key, setKey] = useState(0);
 
-useEffect(() => {
-  setKey(k => k + 1);
-}, [pathname]);
+  useEffect(() => {
+    setKey(k => k + 1);
+  }, [pathname]);
 
   return (
     <main
       key={key}
       className="flex-1 ml-64 p-6"
-      style={{ animation: "fadeSlideUp 0.6s ease forwards" }}
+      style={{ animation: "fadeSlideUp 0.5s ease forwards" }}
     >
       {children}
     </main>
@@ -53,12 +90,13 @@ export default function MainLayout({ children }) {
     else document.documentElement.classList.remove("dark");
   }
 
-
   return (
     <div className={`flex min-h-screen ${dark ? "bg-slate-900" : "bg-[#F0F4FF]"}`}>
+      <TopLoadingBar />
+
       {/* Sidebar */}
       <aside className={`w-64 flex flex-col fixed h-full z-10 shadow-sm ${dark ? "bg-slate-800 border-r border-slate-700" : "bg-white"}`}>
-        
+
         {/* Logo */}
         <div className={`p-6 border-b ${dark ? "border-slate-700" : "border-slate-100"}`}>
           <div className="flex items-center gap-2">
