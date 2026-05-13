@@ -14,6 +14,7 @@ const navItems = [
   { href: "/timer", label: "Study Timer", icon: "⏱️" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
   { href: "/architecture", label: "Architecture", icon: "🏗️" },
+  { href: "/news", label: "News", icon: "📰" },
 ];
 
 function TopLoadingBar() {

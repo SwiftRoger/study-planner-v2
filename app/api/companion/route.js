@@ -48,6 +48,7 @@ Important rules:
   });
 
   const data = await response.json();
+  console.log("Groq companion response:", JSON.stringify(data));
   const reply = data.choices?.[0]?.message?.content || "Sorry, I couldn't process that. Please try again!";
 
   return NextResponse.json({ reply });

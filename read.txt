@@ -1,0 +1,8 @@
+npx prisma studio  "http://localhost:5555" for db visuallizer
+npm run dev
+git add .
+git commit -m "update"
+git push
+git pull *to pull
+
+DONT FORGET TO CHANGE .env file everytime on new laptop because it local save only
