@@ -23,7 +23,9 @@ model Task {
   deadline    DateTime
   priority    String   
   status      String   @default("pending")
+  notes       String?
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
 }
+

@@ -22,11 +22,12 @@ export async function PATCH(req, { params }) {
     const task = await prisma.task.update({
       where: { id: parseInt(id), userId: user.id },
       data: {
-        title: body.title,
-        subject: body.subject,
-        deadline: new Date(body.deadline),
-        priority: body.priority,
-      },
+  title: body.title,
+  subject: body.subject,
+  deadline: new Date(body.deadline),
+  priority: body.priority,
+  notes: body.notes || "",
+},
     });
     return NextResponse.json(task);
   }

@@ -28,21 +28,21 @@ export async function POST(req) {
   const user = await getUser();
   if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const { title, subject, deadline, priority } = await req.json();
-
+  const { title, subject, deadline, priority, notes } = await req.json();
   if (!title || !subject || !deadline || !priority) {
     return NextResponse.json({ message: "All fields are required" }, { status: 400 });
   }
 
   const task = await prisma.task.create({
-    data: {
-      title,
-      subject,
-      deadline: new Date(deadline),
-      priority,
-      userId: user.id,
-    },
-  });
+  data: {
+    title,
+    subject,
+    deadline: new Date(deadline),
+    priority,
+    notes: notes || "",
+    userId: user.id,
+  },
+});
 
   return NextResponse.json(task, { status: 201 });
 }
