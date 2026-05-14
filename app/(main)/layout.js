@@ -15,6 +15,7 @@ const navItems = [
   { href: "/reminders", label: "Reminders", icon: "🔔" },
   { href: "/timer", label: "Study Timer", icon: "⏱️" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
+  { href: "/related", label: "Related", icon: "⚛️" },
   { href: "/architecture", label: "Architecture", icon: "🏗️" },
   { href: "/news", label: "News", icon: "📰" },
 ];
