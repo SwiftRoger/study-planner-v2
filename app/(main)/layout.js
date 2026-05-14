@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import FloatingTimer from "../components/FloatingTimer";
+import AICompanion from "../components/AICompanion";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
@@ -195,6 +197,8 @@ export default function MainLayout({ children }) {
         </div>
 
         <PageWrapper>{children}</PageWrapper>
+        <FloatingTimer />
+          <AICompanion />
       </div>
     </div>
   );
