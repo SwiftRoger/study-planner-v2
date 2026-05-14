@@ -26,7 +26,7 @@ useEffect(() => {
     const data = await res.json();
     setLoading(false);
     if (!res.ok) { setError(data.message); return; }
-    router.push("/dashboard");
+    router.push("/onboarding");
   }
 
   return (
