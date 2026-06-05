@@ -74,7 +74,7 @@ export default function OnboardingPage() {
               <img src="/num-logo.png" alt="NUM" className="w-16 h-16 object-contain" />
             </div>
             <h1 className="text-4xl font-bold text-white mb-3">
-              Welcome Back! 👋
+              Welcome! 👋
             </h1>
             <p className="text-white/60 text-lg mb-2">AI-Based Study Planner System</p>
             <p className="text-white/40 text-sm mb-10">National University of Management · Group 13</p>
