@@ -46,7 +46,7 @@ export async function POST(req) {
     const user = await getUser();
     if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const { type = "chat", messages = [], language = "en" } = await req.json();
+    const { type = "chat", messages = [], language = "en", hours = 4 } = await req.json();
 
     const tasks = await prisma.task.findMany({
       where: { userId: user.id },
@@ -73,27 +73,71 @@ export async function POST(req) {
         });
       }
 
-      const taskList = pending.map(t =>
-        `- ID:${t.id} | ${t.title} | ${t.subject} | ${t.priority} priority | deadline: ${new Date(t.deadline).toDateString()}`
-      ).join("\n");
+      const pending6 = pending.slice(0, 6);
+      const taskList = pending6.map(t => {
+        const daysLeft = Math.ceil((new Date(t.deadline) - new Date()) / (1000 * 60 * 60 * 24));
+        return `ID:${t.id}|${t.title}|${t.subject}|${t.priority}|${daysLeft}d left`;
+      }).join("\n");
 
-      const planPrompt = `You are Lucy, a strict but caring AI study planner.
-Create a day-by-day study schedule. Available hours per day: 4.
-Today: ${new Date().toDateString()}.
-Respond in ${language === "kh" ? "Khmer" : "English only"}.
-Return ONLY valid JSON array, no markdown:
-[{"day":1,"date":"Mon Jun 9","tasks":[{"id":1,"title":"...","subject":"...","priority":"high","allocatedHours":2,"daysLeft":5,"tip":"..."}]}]
-Rules: high priority first, high=2-3hrs, medium=1-2hrs, low=1hr, max 4hrs/day, add a specific tip per task.`;
+      // Ask for FLAT array of tasks — much simpler for the model, we build days ourselves
+      const planPrompt = `You are Lucy, an AI study planner.
+Today: ${new Date().toDateString()}. Hours per day: ${hours}.
+Language for tips: ${language === "kh" ? "Khmer" : "English"}.
+
+Tasks to schedule:
+${taskList}
+
+Return ONLY a flat JSON array of task objects. No nesting, no day grouping, just tasks in priority order.
+Each object has: id, title, subject, priority, allocatedHours, daysLeft, tip (max 8 words), dayNumber (which study day, starting from 1, max ${hours}hrs per day).
+
+Example: [{"id":1,"title":"Math","subject":"Math","priority":"high","allocatedHours":2,"daysLeft":5,"tip":"Review formulas first","dayNumber":1}]
+
+ONLY return the JSON array. No markdown. No explanation.`;
 
       const raw = await callGroq(
-        [{ role: "user", content: `Create study plan:\n${taskList}` }],
-        planPrompt, 800
+        [{ role: "user", content: "Generate the flat task schedule JSON now." }],
+        planPrompt,
+        1000
       );
 
       try {
-        const plan = JSON.parse(raw.replace(/```json|```/g, "").trim());
+        let cleaned = raw.replace(/```json|```/g, "").trim();
+        const arrayMatch = cleaned.match(/\[[\s\S]*?\]/s);
+        if (arrayMatch) cleaned = arrayMatch[0];
+
+        const flatTasks = JSON.parse(cleaned);
+
+        // Group flat tasks into days ourselves — reliable and clean
+        const dayMap = {};
+        const today = new Date();
+
+        for (const task of flatTasks) {
+          const dayNum = task.dayNumber || 1;
+          if (!dayMap[dayNum]) {
+            const d = new Date(today);
+            d.setDate(d.getDate() + dayNum - 1);
+            dayMap[dayNum] = {
+              day: dayNum,
+              date: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+              tasks: [],
+            };
+          }
+          dayMap[dayNum].tasks.push({
+            id: task.id,
+            title: task.title,
+            subject: task.subject,
+            priority: task.priority,
+            allocatedHours: task.allocatedHours || 1,
+            daysLeft: task.daysLeft || 0,
+            tip: task.tip || "",
+          });
+        }
+
+        const plan = Object.values(dayMap).sort((a, b) => a.day - b.day);
         return NextResponse.json({ plan });
-      } catch {
+
+      } catch (e) {
+        console.error("Plan parse error:", e.message, "| raw:", raw.slice(0, 300));
         return NextResponse.json({ plan: [], message: "Could not generate plan, please try again." });
       }
     }
@@ -104,15 +148,64 @@ Rules: high priority first, high=2-3hrs, medium=1-2hrs, low=1hr, max 4hrs/day, a
       const userTypedKhmer = detectKhmer(lastMessage);
       const effectiveLang = userTypedKhmer ? "kh" : "en";
 
+      // ── Detect task actions from message ─────────────────
+      const completeKeywords = /\b(finish|finished|done|completed|complete|submitted|turned in|handed in|pass|passed|បាន|រួច|ចប់|សម្រេច|បញ្ចប់)\b/i;
+      const cancelKeywords = /\b(cancel|cancelled|canceled|delete|remove|drop|skip|postpone|reschedule|sick|called off|not happening|លុប|បោះបង់|លែង)\b/i;
+
+      let completedTask = null;
+      let cancelledTask = null;
+
+      // Fuzzy match: check if any word from task title appears in message
+      function fuzzyMatch(message, taskTitle) {
+        const msgLower = message.toLowerCase();
+        const titleWords = taskTitle.toLowerCase()
+          .split(/\s+/)
+          .filter(w => w.length > 3); // skip short words like "with", "the"
+        // Match if ANY significant word from title is in message
+        return titleWords.some(word => msgLower.includes(word));
+      }
+
+      const lowerMsg = lastMessage.toLowerCase();
+
+      if (completeKeywords.test(lastMessage)) {
+        const matchedTask = tasks.find(t =>
+          t.status === "pending" && fuzzyMatch(lastMessage, t.title)
+        );
+        if (matchedTask) {
+          await prisma.task.update({
+            where: { id: matchedTask.id },
+            data: { status: "completed" },
+          });
+          completedTask = { id: matchedTask.id, title: matchedTask.title };
+        }
+      }
+
+      if (cancelKeywords.test(lastMessage)) {
+        const matchedTask = tasks.find(t =>
+          t.status === "pending" && fuzzyMatch(lastMessage, t.title)
+        );
+        if (matchedTask && !completedTask) {
+          await prisma.task.delete({ where: { id: matchedTask.id } });
+          cancelledTask = { id: matchedTask.id, title: matchedTask.title };
+        }
+      }
+
       const taskContext = buildTaskContext(tasks);
       const basePrompt = buildSystemPrompt(effectiveLang, taskContext);
       const langEnforcement = effectiveLang === "en"
         ? `\n\nCRITICAL: User wrote in ENGLISH. Reply in ENGLISH ONLY. No Khmer script whatsoever.`
         : `\n\nបង្គាប់: ឆ្លើយជាភាសាខ្មែរទាំងស្រុង។`;
 
+      // Tell Lucy what actually happened
+      const completionContext = completedTask
+        ? `\n\nSYSTEM: Task "${completedTask.title}" has been marked COMPLETED in the database. Celebrate with the student!`
+        : cancelledTask
+        ? `\n\nSYSTEM: Task "${cancelledTask.title}" has been DELETED from the database. Acknowledge this and move on.`
+        : "";
+
       const rawReply = await callGroq(
         messages.slice(-10),
-        basePrompt + langEnforcement,
+        basePrompt + langEnforcement + completionContext,
         400
       );
 
@@ -134,7 +227,9 @@ Rules: high priority first, high=2-3hrs, medium=1-2hrs, low=1hr, max 4hrs/day, a
 
       return NextResponse.json({
         reply: cleanReply,
-        pendingTask,          // frontend shows confirmation card
+        pendingTask,
+        completedTask,
+        cancelledTask,        // frontend shows red toast
         language: effectiveLang,
       });
     }
