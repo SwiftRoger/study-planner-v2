@@ -33,12 +33,13 @@ export async function PATCH(req, { params }) {
   }
 
   // Status update only
-  const task = await prisma.task.update({
-    where: { id: parseInt(id), userId: user.id },
-    data: { status: body.status },
-  });
-  return NextResponse.json(task);
-}
+const task = await prisma.task.update({
+  where: { id: parseInt(id), userId: user.id },
+  data: {
+    status: body.status,
+    completedAt: body.status === "completed" ? new Date() : null,
+  },
+});
 
 export async function DELETE(_, { params }) {
   const user = await getUser();
