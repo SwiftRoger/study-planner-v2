@@ -12,6 +12,7 @@ const navItems = [
   { href: "/planner",    label: "Study Planner",  icon: "🤖" },
   { href: "/calendar",   label: "Calendar",       icon: "📅" },
   { href: "/progress",   label: "Progress",       icon: "📊" },
+  { href: "/history", label: "Task History", icon: "📜" },
   { href: "/reminders",  label: "Reminders",      icon: "🔔" },
   { href: "/timer",      label: "Study Timer",    icon: "⏱️" },
   { href: "/settings",   label: "Settings",       icon: "⚙️" },
@@ -88,13 +89,7 @@ export default function MainLayout({ children }) {
   // Close sidebar on route change (mobile)
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  function toggleDark() {
-    const next = !dark;
-    setDark(next);
-    localStorage.setItem("darkMode", String(next));
-    if (next) document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-  }
+  
 
   function toggleLanguage() {
     const next = language === "en" ? "kh" : "en";
@@ -200,27 +195,9 @@ export default function MainLayout({ children }) {
           </button>
         </div>
 
-        {/* Dark mode toggle */}
-        <div className={`px-4 py-3 border-t ${dark ? "border-slate-700" : "border-slate-100"}`}>
-          <button
-            onClick={toggleDark}
-            className={`w-full flex items-center justify-between px-4 py-2 rounded-xl text-sm transition-all ${
-              dark
-                ? "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                : "bg-[#F0F4FF] text-slate-600 hover:bg-[#EBF1FF]"
-            }`}
-          >
-            <span>{dark ? "🌙 Dark Mode" : "☀️ Light Mode"}</span>
-            <div className={`w-10 h-5 rounded-full relative transition-colors ${dark ? "bg-[#4F8CFF]" : "bg-slate-300"}`}>
-              <div
-                className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${
-                  dark ? "left-5" : "left-0.5"
-                }`}
-              />
-            </div>
-          </button>
-        </div>
-
+        
+        
+          
         {/* User info */}
         <div className={`p-4 border-t ${dark ? "border-slate-700" : "border-slate-100"}`}>
           <div className="flex items-center gap-3 px-2">
@@ -259,7 +236,7 @@ export default function MainLayout({ children }) {
             <img src="/num-logo.png" alt="NUM" className="w-7 h-7 object-contain" />
             <p className={`font-bold text-sm ${dark ? "text-white" : "text-slate-800"}`}>
               Study Planner
-            </p>
+            </p>{/* Dark mode toggle */}
           </div>
           {/* Mobile language toggle */}
           <button

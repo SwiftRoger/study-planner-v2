@@ -12,8 +12,10 @@ model User {
   name      String
   email     String   @unique
   password  String
+  role      String   @default("student")
   createdAt DateTime @default(now())
   tasks     Task[]
+  surveyResponses SurveyResponse[]
 }
 
 model Task {
@@ -21,7 +23,7 @@ model Task {
   title       String
   subject     String
   deadline    DateTime
-  priority    String   
+  priority    String
   status      String   @default("pending")
   notes       String?
   userId      Int
@@ -30,3 +32,39 @@ model Task {
   completedAt DateTime?
 }
 
+model Survey {
+  id          Int              @id @default(autoincrement())
+  title       String
+  description String?
+  createdAt   DateTime         @default(now())
+  isActive    Boolean          @default(true)
+  questions   SurveyQuestion[]
+  responses   SurveyResponse[]
+}
+
+model SurveyQuestion {
+  id        Int      @id @default(autoincrement())
+  surveyId  Int
+  survey    Survey   @relation(fields: [surveyId], references: [id])
+  question  String
+  category  String   @default("general")
+  order     Int      @default(0)
+}
+
+model SurveyResponse {
+  id          Int      @id @default(autoincrement())
+  surveyId    Int
+  survey      Survey   @relation(fields: [surveyId], references: [id])
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  answers     String
+  submittedAt DateTime @default(now())
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}

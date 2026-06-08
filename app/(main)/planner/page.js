@@ -1,636 +1,406 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-const STORAGE_KEY = "lucy_chat_history";
+const PRIORITY = {
+  high:   { label: "High",   bg: "#fee2e2", color: "#dc2626", dot: "#ef4444" },
+  medium: { label: "Medium", bg: "#fef9c3", color: "#ca8a04", dot: "#eab308" },
+  low:    { label: "Low",    bg: "#dcfce7", color: "#16a34a", dot: "#22c55e" },
+};
 
-// ── Lucy avatar ───────────────────────────────────────────────
-function LucyAvatar({ size = 36, pulse = false }) {
-  return (
-    <div
-      className={pulse ? "animate-pulse" : ""}
-      style={{
-        width: size, height: size, borderRadius: "50%",
-        background: "linear-gradient(135deg, #4F8CFF 0%, #667eea 100%)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: size * 0.45, flexShrink: 0,
-        boxShadow: "0 2px 12px rgba(79,140,255,0.35)",
-      }}
-    >
-      🎓
-    </div>
-  );
-}
+const PLAN_STORAGE_KEY = "lucy_study_plan";
 
-// ── Task confirmation card ────────────────────────────────────
-function TaskConfirmCard({ task, onConfirm, onCancel, language }) {
-  const [priority, setPriority] = useState(task.priority || "medium");
-  const [title, setTitle] = useState(task.title || "");
-  const [subject, setSubject] = useState(task.subject || "");
-  const [editing, setEditing] = useState(false);
-
-  const deadlineDisplay = (() => {
-    try {
-      const d = new Date(task.deadline);
-      if (isNaN(d)) return task.deadline;
-      return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-    } catch { return task.deadline; }
-  })();
-
-  const priorityColors = {
-    low: { bg: "#dcfce7", color: "#16a34a", border: "#16a34a" },
-    medium: { bg: "#fef9c3", color: "#ca8a04", border: "#ca8a04" },
-    high: { bg: "#fee2e2", color: "#dc2626", border: "#dc2626" },
-  };
+// ── Day card ──────────────────────────────────────────────────
+function DayCard({ day, index }) {
+  const totalHours = day.tasks.reduce((sum, t) => sum + (t.allocatedHours || 0), 0);
 
   return (
     <div style={{
-      background: "white", borderRadius: 16, padding: 16, marginBottom: 16,
-      boxShadow: "0 4px 20px rgba(79,140,255,0.15)",
-      border: "1.5px solid #e0e7ff",
-      animation: "fadeSlideUp 0.3s ease forwards",
+      background: "white", borderRadius: 20, padding: 20,
+      boxShadow: "0 2px 16px rgba(0,0,0,0.06)",
+      border: "1.5px solid #f1f5f9",
+      animation: `fadeSlideUp 0.4s ease ${index * 0.1}s both`,
     }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 18 }}>📚</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#4F8CFF" }}>
-          {language === "kh" ? "Lucy ចង់បន្ថែមកិច្ចការនេះ" : "Lucy wants to add this task"}
-        </span>
-        <button
-          onClick={() => setEditing(!editing)}
-          style={{
-            marginLeft: "auto", fontSize: 11, padding: "3px 10px",
-            borderRadius: 8, border: "1px solid #e2e8f0",
-            background: editing ? "#EBF1FF" : "white",
-            color: editing ? "#4F8CFF" : "#94a3b8",
-            cursor: "pointer", fontWeight: 600,
-          }}
-        >
-          ✏️ {editing ? (language === "kh" ? "រួចរាល់" : "Done") : (language === "kh" ? "កែប្រែ" : "Edit")}
-        </button>
-      </div>
-
-      {/* Task details */}
-      <div style={{ background: "#F8FAFF", borderRadius: 12, padding: 12, marginBottom: 12 }}>
-        {editing ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div>
-              <label style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
-                {language === "kh" ? "ចំណងជើង" : "TITLE"}
-              </label>
-              <input
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                style={{
-                  width: "100%", border: "1.5px solid #e2e8f0", borderRadius: 8,
-                  padding: "6px 10px", fontSize: 13, marginTop: 2,
-                  outline: "none", boxSizing: "border-box",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
-                {language === "kh" ? "មុខវិជ្ជា" : "SUBJECT"}
-              </label>
-              <input
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-                style={{
-                  width: "100%", border: "1.5px solid #e2e8f0", borderRadius: 8,
-                  padding: "6px 10px", fontSize: 13, marginTop: 2,
-                  outline: "none", boxSizing: "border-box",
-                }}
-              />
-            </div>
-          </div>
-        ) : (
-          <>
-            <p style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", marginBottom: 4 }}>{title}</p>
-            <p style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
-              📖 {language === "kh" ? "មុខវិជ្ជា" : "Subject"}: <strong>{subject}</strong>
-            </p>
-            <p style={{ fontSize: 12, color: "#64748b" }}>
-              📅 {language === "kh" ? "ផុតកំណត់" : "Deadline"}: <strong>{deadlineDisplay}</strong>
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* Priority picker */}
-      <div style={{ marginBottom: 14 }}>
-        <p style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, marginBottom: 6 }}>
-          {language === "kh" ? "អាទិភាព" : "PRIORITY"}
-        </p>
-        <div style={{ display: "flex", gap: 8 }}>
-          {["low", "medium", "high"].map((p) => {
-            const c = priorityColors[p];
-            const selected = priority === p;
-            return (
-              <button
-                key={p}
-                onClick={() => setPriority(p)}
-                style={{
-                  flex: 1, padding: "8px 4px", borderRadius: 10, cursor: "pointer",
-                  border: selected ? `2px solid ${c.border}` : "2px solid #e2e8f0",
-                  background: selected ? c.bg : "white",
-                  color: selected ? c.color : "#94a3b8",
-                  fontWeight: selected ? 700 : 500,
-                  fontSize: 12, transition: "all 0.15s",
-                }}
-              >
-                {p === "low" ? "🟢" : p === "medium" ? "🟡" : "🔴"} {p.charAt(0).toUpperCase() + p.slice(1)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button
-          onClick={() => onConfirm({ ...task, title, subject, priority })}
-          style={{
-            flex: 2, padding: "10px", borderRadius: 12, border: "none",
+      {/* Day header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 16, paddingBottom: 12,
+        borderBottom: "1.5px solid #f1f5f9",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
             background: "linear-gradient(135deg, #4F8CFF, #667eea)",
-            color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(79,140,255,0.3)",
-          }}
-        >
-          ✅ {language === "kh" ? "បន្ថែមកិច្ចការ" : "Add Task"}
-        </button>
-        <button
-          onClick={onCancel}
-          style={{
-            flex: 1, padding: "10px", borderRadius: 12,
-            border: "1.5px solid #e2e8f0", background: "white",
-            color: "#94a3b8", fontWeight: 600, fontSize: 13, cursor: "pointer",
-          }}
-        >
-          ❌ {language === "kh" ? "បោះបង់" : "Cancel"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Task saved toast ──────────────────────────────────────────
-function TaskToast({ task, onClose }) {
-  useEffect(() => {
-    const t = setTimeout(onClose, 4000);
-    return () => clearTimeout(t);
-  }, [onClose]);
-
-  const config = task.completed
-    ? { bg: "linear-gradient(135deg, #22c55e, #16a34a)", shadow: "rgba(34,197,94,0.4)", icon: "✅", title: "Task completed!", body: `"${task.title}" is done! Great job! 🎉` }
-    : task.cancelled
-    ? { bg: "linear-gradient(135deg, #f97316, #ea580c)", shadow: "rgba(249,115,22,0.4)", icon: "🗑️", title: "Task removed!", body: `"${task.title}" has been deleted.` }
-    : { bg: "linear-gradient(135deg, #4F8CFF, #667eea)", shadow: "rgba(79,140,255,0.4)", icon: "✅", title: "Task saved!", body: `${task.title} — ${task.priority} priority` };
-
-  return (
-    <div style={{
-      position: "fixed", bottom: 24, right: 24, zIndex: 100,
-      background: config.bg, color: "white", borderRadius: 16, padding: "14px 18px",
-      boxShadow: `0 8px 32px ${config.shadow}`,
-      maxWidth: 300, animation: "slideUp 0.3s ease",
-    }}>
-      <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{config.icon} {config.title}</p>
-      <p style={{ fontSize: 12, opacity: 0.9 }}>{config.body}</p>
-      <button onClick={onClose} style={{
-        position: "absolute", top: 8, right: 10,
-        background: "none", border: "none", color: "white",
-        cursor: "pointer", fontSize: 14, opacity: 0.7,
-      }}>✕</button>
-    </div>
-  );
-}
-
-// ── Typing dots ───────────────────────────────────────────────
-function TypingDots() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 14px" }}>
-      {[0, 1, 2].map((i) => (
-        <div key={i} style={{
-          width: 7, height: 7, borderRadius: "50%", background: "#4F8CFF",
-          animation: "bounce 1.2s ease infinite",
-          animationDelay: `${i * 0.2}s`,
-        }} />
-      ))}
-    </div>
-  );
-}
-
-// ── Message bubble ────────────────────────────────────────────
-function MessageBubble({ msg, isLatest }) {
-  const isLucy = msg.role === "assistant";
-  return (
-    <div style={{
-      display: "flex", flexDirection: isLucy ? "row" : "row-reverse",
-      alignItems: "flex-end", gap: 10, marginBottom: 16,
-      animation: isLatest ? "fadeSlideUp 0.35s ease forwards" : "none",
-    }}>
-      {isLucy && <LucyAvatar size={34} />}
-      <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: isLucy ? "flex-start" : "flex-end" }}>
-        {isLucy && <span style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4, fontWeight: 600 }}>Lucy</span>}
-        <div style={{
-          padding: "12px 16px",
-          borderRadius: isLucy ? "4px 18px 18px 18px" : "18px 4px 18px 18px",
-          background: isLucy ? "white" : "linear-gradient(135deg, #4F8CFF 0%, #667eea 100%)",
-          color: isLucy ? "#1e293b" : "white",
-          fontSize: 14, lineHeight: 1.6,
-          boxShadow: isLucy ? "0 2px 12px rgba(0,0,0,0.06)" : "0 4px 16px rgba(79,140,255,0.3)",
-          whiteSpace: "pre-wrap", wordBreak: "break-word",
-        }}>
-          {msg.content}
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14, fontWeight: 800, color: "white",
+          }}>
+            {day.day}
+          </div>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+              Day {day.day}
+            </p>
+            {day.date && (
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>{day.date}</p>
+            )}
+          </div>
         </div>
-        <span style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{msg.time || ""}</span>
+        <div style={{
+          fontSize: 12, fontWeight: 600, color: "#4F8CFF",
+          background: "#EBF1FF", padding: "4px 12px", borderRadius: 20,
+        }}>
+          ⏱ {totalHours} hr{totalHours !== 1 ? "s" : ""}
+        </div>
+      </div>
+
+      {/* Tasks */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {day.tasks.map((task, i) => {
+          const pri = PRIORITY[task.priority] || PRIORITY.medium;
+          const isOverdue = task.daysLeft <= 0;
+
+          return (
+            <div key={i} style={{
+              background: "#f8fafc", borderRadius: 14, padding: "14px 16px",
+              borderLeft: `3px solid ${pri.dot}`,
+              position: "relative",
+            }}>
+              {/* Task top */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+                    {task.title}
+                  </p>
+                  <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>
+                    📖 {task.subject}
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                    background: pri.bg, color: pri.color,
+                  }}>
+                    {pri.label}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                    background: isOverdue ? "#fee2e2" : "#EBF1FF",
+                    color: isOverdue ? "#dc2626" : "#4F8CFF",
+                  }}>
+                    {isOverdue ? "⚠️ Overdue" : `${task.daysLeft}d left`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Hours bar */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: task.tip ? 10 : 0 }}>
+                <div style={{ flex: 1, height: 6, background: "#e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", borderRadius: 10,
+                    width: `${Math.min((task.allocatedHours / 4) * 100, 100)}%`,
+                    background: "linear-gradient(90deg, #4F8CFF, #667eea)",
+                    transition: "width 1s ease",
+                  }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#4F8CFF", whiteSpace: "nowrap" }}>
+                  {task.allocatedHours} hr{task.allocatedHours !== 1 ? "s" : ""}
+                </span>
+              </div>
+
+              {/* Lucy's tip */}
+              {task.tip && (
+                <div style={{
+                  display: "flex", alignItems: "flex-start", gap: 8,
+                  background: "linear-gradient(135deg, #EBF1FF, #f0f4ff)",
+                  borderRadius: 10, padding: "10px 12px",
+                  border: "1px solid #dbeafe",
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>🎓</span>
+                  <p style={{ fontSize: 12, color: "#3b5bdb", lineHeight: 1.5, margin: 0, fontStyle: "italic" }}>
+                    {task.tip}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-const QUICK_EN = [
-  "What tasks do I have this week?",
-  "I have an exam coming up, help me plan",
-  "What should I study today?",
-  "I'm feeling overwhelmed with my tasks",
-];
-const QUICK_KH = [
-  "តើខ្ញុំមានកិច្ចការអ្វីខ្លះអាទិត្យនេះ?",
-  "ខ្ញុំមានប្រឡង សូមជួយរៀបចំផែនការ",
-  "ថ្ងៃនេះខ្ញុំគួរសិក្សាអ្វី?",
-  "ខ្ញុំមានអារម្មណ៍ភ័យខ្លាចកិច្ចការច្រើន",
-];
-
-function detectKhmerText(text) {
-  return /[\u1780-\u17FF]/.test(text);
-}
-
-function now() {
-  return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-}
-
-// ─────────────────────────────────────────────────────────────
-export default function LucyPage() {
+// ── Main Page ─────────────────────────────────────────────────
+export default function PlannerPage() {
   const router = useRouter();
-  const [messages, setMessages] = useState(null);
-  const [input, setInput] = useState("");
+  const [plan, setPlan] = useState([]);
+  const [hours, setHours] = useState(4);
   const [loading, setLoading] = useState(false);
-  const [language, setLanguage] = useState("en");
-  const [toast, setToast] = useState(null);
-  const [userName, setUserName] = useState("there");
-  // Pending task waiting for confirmation
-  const [pendingTask, setPendingTask] = useState(null);
-  const bottomRef = useRef(null);
-  const inputRef = useRef(null);
+  const [generated, setGenerated] = useState(false);
+  const [message, setMessage] = useState("");
+  const [lucyIntro, setLucyIntro] = useState("");
 
-  // ── Load on mount ─────────────────────────────────────────
+  // Load saved plan on mount
   useEffect(() => {
-    const savedLang = localStorage.getItem("lucyLanguage") || "en";
-    setLanguage(savedLang);
-
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(PLAN_STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
-          return;
+        const { plan: savedPlan, lucyIntro: savedIntro, hours: savedHours } = JSON.parse(saved);
+        if (savedPlan?.length > 0) {
+          setPlan(savedPlan);
+          setLucyIntro(savedIntro || "");
+          setHours(savedHours || 4);
+          setGenerated(true);
         }
       }
     } catch {}
-
-    fetch("/api/me").then(r => r.json()).then(d => {
-      const name = d.user ? d.user.name.split(" ")[0] : "there";
-      setUserName(name);
-      const lang = localStorage.getItem("lucyLanguage") || "en";
-      const greet = lang === "kh"
-        ? `សួស្តី! ខ្ញុំឈ្មោះ Lucy 🎓\nខ្ញុំជាជំនួយការសិក្សា AI របស់អ្នក។\nតើខ្ញុំអាចជួយអ្នកបានដោយរបៀបណាថ្ងៃនេះ?`
-        : `Hi ${name}! I'm Lucy 🎓\nI'm your AI study companion. Tell me about assignments, exams, or tasks and I'll help you stay on track.\nWhat's on your plate today?`;
-      const initial = [{ role: "assistant", content: greet, time: now() }];
-      setMessages(initial);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-    });
   }, []);
 
-  useEffect(() => {
-    fetch("/api/me").then(r => r.json()).then(d => {
-      if (d.user) setUserName(d.user.name.split(" ")[0]);
-    });
-  }, []);
-
-  // ── Persist messages ──────────────────────────────────────
-  useEffect(() => {
-    if (messages && messages.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-50)));
-    }
-  }, [messages]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, pendingTask]);
-
-  // ── Language toggle ───────────────────────────────────────
-  function toggleLanguage() {
-    const next = language === "en" ? "kh" : "en";
-    setLanguage(next);
-    localStorage.setItem("lucyLanguage", next);
-    setMessages(prev => [...(prev || []), {
-      role: "assistant",
-      content: next === "kh"
-        ? "បានប្តូរទៅភាសាខ្មែរ! 🇰🇭 តើខ្ញុំអាចជួយអ្នកបានដោយរបៀបណា?"
-        : "Switched to English! 🇺🇸 How can I help you?",
-      time: now(),
-    }]);
-  }
-
-  // ── Clear chat ────────────────────────────────────────────
-  function clearChat() {
-    localStorage.removeItem(STORAGE_KEY);
-    setPendingTask(null);
-    const lang = localStorage.getItem("lucyLanguage") || "en";
-    const greet = lang === "kh"
-      ? `សួស្តី! ខ្ញុំឈ្មោះ Lucy 🎓\nតើខ្ញុំអាចជួយអ្នកបានដោយរបៀបណាថ្ងៃនេះ?`
-      : `Hi ${userName}! I'm Lucy 🎓\nWhat's on your plate today?`;
-    const initial = [{ role: "assistant", content: greet, time: now() }];
-    setMessages(initial);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-  }
-
-  // ── Confirm task save ─────────────────────────────────────
-  async function confirmTask(taskData) {
-    setPendingTask(null);
-    try {
-      const res = await fetch("/api/lucy/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taskData),
-      });
-      const data = await res.json();
-      if (data.task) {
-        setToast(data.task);
-        setMessages(prev => [...(prev || []), {
-          role: "assistant",
-          content: language === "kh"
-            ? `បានរក្សាទុករួចហើយ! "${data.task.title}" ត្រូវបានបន្ថែមទៅបញ្ជីកិច្ចការរបស់អ្នក។ 📋`
-            : `Got it! "${data.task.title}" has been added to your tasks. Go check it out! 📋`,
-          time: now(),
-        }]);
-      }
-    } catch {
-      setMessages(prev => [...(prev || []), {
-        role: "assistant",
-        content: language === "kh" ? "មានបញ្ហាក្នុងការរក្សាទុក សូមព្យាយាមម្តងទៀត។" : "Oops, couldn't save the task. Try again!",
-        time: now(),
-      }]);
-    }
-  }
-
-  function cancelTask() {
-    setPendingTask(null);
-    setMessages(prev => [...(prev || []), {
-      role: "assistant",
-      content: language === "kh"
-        ? "យល់ព្រម! ខ្ញុំបានលុបចោល។ ប្រាប់ខ្ញុំបើអ្នកចង់បន្ថែមក្រោយ។"
-        : "No problem! Task cancelled. Just let me know if you want to add it later.",
-      time: now(),
-    }]);
-  }
-
-  // ── Send message ──────────────────────────────────────────
-  async function sendMessage(text) {
-    const content = (text || input).trim();
-    if (!content || loading) return;
-    setInput("");
-
-    const userMsg = { role: "user", content, time: now() };
-    const updatedMessages = [...(messages || []), userMsg];
-    setMessages(updatedMessages);
+  async function generatePlan() {
     setLoading(true);
+    setMessage("");
+    setLucyIntro("");
+    localStorage.removeItem(PLAN_STORAGE_KEY);
 
     try {
-      const userTypedKhmer = detectKhmerText(content);
-      const effectiveLang = userTypedKhmer ? "kh" : language;
+      const language = localStorage.getItem("lucyLanguage") || "en";
 
       const res = await fetch("/api/lucy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "chat",
-          messages: updatedMessages.map(({ role, content }) => ({ role, content })),
-          language: effectiveLang,
-        }),
+        body: JSON.stringify({ type: "plan", hours, language }),
       });
 
       if (res.status === 401) { router.push("/login"); return; }
 
       const data = await res.json();
 
-      setMessages(prev => [...(prev || []), {
-        role: "assistant",
-        content: data.reply || "Sorry, I had trouble responding. Try again!",
-        time: now(),
-      }]);
-
-      // Instead of auto-saving, show confirmation card
-      if (data.pendingTask) {
-        setPendingTask(data.pendingTask);
+      if (data.message) {
+        setMessage(data.message);
+        setPlan([]);
+      } else if (data.plan) {
+        const totalTasks = data.plan.reduce((sum, d) => sum + d.tasks.length, 0);
+        setPlan(data.plan);
+        const intro = language === "kh"
+            ? `ខ្ញុំបានរៀបចំផែនការសិក្សា ${data.plan.length} ថ្ងៃ សម្រាប់កិច្ចការ ${totalTasks} ។ ចាប់ផ្តើមថ្ងៃទី 1 ហើយកុំឱ្យខ្ញុំខក!`
+            : `I've mapped out ${data.plan.length} study days covering ${totalTasks} task${totalTasks !== 1 ? "s" : ""}. Follow this plan and don't you dare skip a day! 😤`;
+        setLucyIntro(intro);
+        // Save to localStorage so it persists across tab switches
+        localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ plan: data.plan, lucyIntro: intro, hours }));
       }
-
-      // Task was marked complete by Lucy
-      if (data.completedTask) {
-        setToast({ ...data.completedTask, completed: true });
-      }
-
-      // Task was cancelled/deleted by Lucy
-      if (data.cancelledTask) {
-        setToast({ ...data.cancelledTask, cancelled: true });
-      }
-
     } catch {
-      setMessages(prev => [...(prev || []), {
-        role: "assistant",
-        content: "Oops, something went wrong. Give me a second and try again! 😅",
-        time: now(),
-      }]);
+      setMessage("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      setGenerated(true);
     }
   }
-
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  if (messages === null) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{
-          width: 32, height: 32, border: "3px solid #4F8CFF",
-          borderTopColor: "transparent", borderRadius: "50%",
-          animation: "spin 0.8s linear infinite",
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-  const quickPrompts = language === "kh" ? QUICK_KH : QUICK_EN;
 
   return (
     <>
       <style>{`
-        @keyframes fadeSlideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
-        @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeSlideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
         @keyframes spin { to{transform:rotate(360deg)} }
-        .lucy-input:focus{outline:none}
-        .quick-btn:hover{background:#EBF1FF !important;color:#4F8CFF !important;border-color:#4F8CFF !important}
-        .send-btn:hover{opacity:0.85}
-        .send-btn:disabled{opacity:0.5;cursor:not-allowed}
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
       `}</style>
 
-      <div style={{ maxWidth: 800, margin: "0 auto", height: "calc(100vh - 80px)", display: "flex", flexDirection: "column" }}>
+      <div style={{ maxWidth: 800, margin: "0 auto" }}>
 
         {/* Header */}
         <div style={{
-          background: "white", borderRadius: 20, padding: "16px 20px", marginBottom: 12,
+          background: "white", borderRadius: 20, padding: "20px 24px",
+          marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <LucyAvatar size={44} />
-            <div>
-              <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1e293b", margin: 0 }}>Lucy</h1>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e" }} />
-                <span style={{ fontSize: 12, color: "#64748b" }}>
-                  {language === "kh" ? "ជំនួយការសិក្សា AI" : "AI Study Companion · Online"}
-                </span>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", margin: 0 }}>
+              🤖 AI Study Planner
+            </h1>
+            <p style={{ fontSize: 13, color: "#64748b", marginTop: 4, margin: "4px 0 0" }}>
+              Lucy builds your personalized study schedule
+            </p>
+          </div>
+          <Link href="/lucy" style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 14px", borderRadius: 12,
+            background: "#EBF1FF", color: "#4F8CFF",
+            fontSize: 12, fontWeight: 700, textDecoration: "none",
+          }}>
+            🎓 Add tasks via Lucy
+          </Link>
+        </div>
+
+        {/* Settings card */}
+        <div style={{
+          background: "white", borderRadius: 20, padding: "20px 24px",
+          marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+        }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", marginBottom: 16 }}>
+            Study Settings
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 8 }}>
+                Available study hours per day:{" "}
+                <span style={{ fontWeight: 800, color: "#4F8CFF" }}>{hours} hours</span>
+              </label>
+              <input
+                type="range" min="1" max="12" value={hours}
+                onChange={e => setHours(parseInt(e.target.value))}
+                style={{ width: "100%", accentColor: "#4F8CFF" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                <span>1 hr</span><span>12 hrs</span>
               </div>
             </div>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={clearChat} style={{
-              padding: "8px 12px", borderRadius: 12, border: "1.5px solid #e2e8f0",
-              background: "white", cursor: "pointer", fontSize: 12, color: "#94a3b8",
-            }}>🗑️ Clear</button>
-            <button onClick={toggleLanguage} style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
-              borderRadius: 12, border: "1.5px solid #e2e8f0", background: "white",
-              cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#475569",
-            }}>
-              <span>{language === "en" ? "🇺🇸" : "🇰🇭"}</span>
-              <span>{language === "en" ? "EN" : "KH"}</span>
-              <span style={{ opacity: 0.4, fontSize: 11 }}>/ {language === "en" ? "KH" : "EN"}</span>
+            <button
+              onClick={generatePlan}
+              disabled={loading}
+              style={{
+                padding: "12px 24px", borderRadius: 14, border: "none",
+                background: loading ? "#94a3b8" : "linear-gradient(135deg, #1e293b, #334155)",
+                color: "white", fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+            >
+              {loading ? (
+                <>
+                  <div style={{ width: 16, height: 16, border: "2px solid white", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                  Generating...
+                </>
+              ) : "✨ Generate Plan"}
             </button>
           </div>
         </div>
 
-        {/* Chat area */}
-        <div style={{
-          flex: 1, overflowY: "auto", background: "#F0F4FF",
-          borderRadius: 20, padding: "20px 16px", marginBottom: 12,
-        }}>
-          {messages.map((msg, i) => (
-            <MessageBubble key={i} msg={msg} isLatest={i === messages.length - 1 && !pendingTask} />
-          ))}
-
-          {loading && (
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 16 }}>
-              <LucyAvatar size={34} pulse />
-              <div style={{ background: "white", borderRadius: "4px 18px 18px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-                <TypingDots />
-              </div>
-            </div>
-          )}
-
-          {/* Task confirmation card */}
-          {pendingTask && (
-            <TaskConfirmCard
-              task={pendingTask}
-              language={language}
-              onConfirm={confirmTask}
-              onCancel={cancelTask}
-            />
-          )}
-
-          <div ref={bottomRef} />
-        </div>
-
-        {/* Quick prompts */}
-        {messages.length <= 2 && !pendingTask && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-            {quickPrompts.map((p, i) => (
-              <button key={i} onClick={() => sendMessage(p)} className="quick-btn" style={{
-                padding: "7px 14px", borderRadius: 20, border: "1.5px solid #e2e8f0",
-                background: "white", fontSize: 12, color: "#475569", cursor: "pointer", fontWeight: 500,
-              }}>{p}</button>
-            ))}
+        {/* Loading state */}
+        {loading && (
+          <div style={{
+            background: "white", borderRadius: 20, padding: 40,
+            textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+          }}>
+            <div style={{
+              width: 48, height: 48, border: "4px solid #EBF1FF",
+              borderTopColor: "#4F8CFF", borderRadius: "50%",
+              animation: "spin 0.8s linear infinite", margin: "0 auto 16px",
+            }} />
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#1e293b", margin: 0 }}>
+              Lucy is analyzing your tasks...
+            </p>
+            <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 6 }}>
+              Building your personalized schedule
+            </p>
           </div>
         )}
 
-        {/* Input bar */}
-        <div style={{
-          background: "white", borderRadius: 20, padding: "12px 16px",
-          display: "flex", alignItems: "flex-end", gap: 10,
-          boxShadow: "0 2px 12px rgba(0,0,0,0.06)", border: "1.5px solid #e2e8f0",
-        }}>
-          <textarea
-            ref={inputRef}
-            className="lucy-input"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={language === "kh"
-              ? "សរសេរសាររបស់អ្នកទៅ Lucy... (Enter ដើម្បីផ្ញើ)"
-              : "Tell Lucy about your tasks, exams, or ask anything... (Enter to send)"}
-            rows={1}
-            style={{
-              flex: 1, border: "none", resize: "none", fontSize: 14,
-              color: "#1e293b", lineHeight: 1.5, background: "transparent",
-              maxHeight: 120, overflowY: "auto",
-            }}
-            onInput={e => {
-              e.target.style.height = "auto";
-              e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-            }}
-          />
-          <button
-            onClick={() => sendMessage()}
-            disabled={!input.trim() || loading}
-            className="send-btn"
-            style={{
-              width: 40, height: 40, borderRadius: 12,
-              background: "linear-gradient(135deg, #4F8CFF, #667eea)",
-              border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, boxShadow: "0 4px 12px rgba(79,140,255,0.3)",
-            }}
-          >
-            {loading ? (
-              <div style={{ width: 16, height: 16, border: "2px solid white", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M22 2L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+        {/* Results */}
+        {!loading && generated && (
+          <>
+            {/* No tasks message */}
+            {message && (
+              <div style={{
+                background: "white", borderRadius: 20, padding: 48,
+                textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+              }}>
+                <p style={{ fontSize: 40, marginBottom: 12 }}>📭</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "#1e293b" }}>{message}</p>
+                <Link href="/lucy" style={{
+                  display: "inline-block", marginTop: 16, padding: "10px 20px",
+                  borderRadius: 12, background: "linear-gradient(135deg,#4F8CFF,#667eea)",
+                  color: "white", fontSize: 13, fontWeight: 700, textDecoration: "none",
+                }}>
+                  🎓 Tell Lucy about your tasks
+                </Link>
+              </div>
             )}
-          </button>
-        </div>
 
-        <p style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
-          {language === "kh"
-            ? "Lucy នឹងស្នើសុំការបញ្ជាក់ មុននឹងរក្សាទុកកិច្ចការ"
-            : "Lucy will ask for confirmation before saving any task"}
-        </p>
+            {/* Lucy intro message */}
+            {plan.length > 0 && lucyIntro && (
+              <div style={{
+                background: "linear-gradient(135deg, #1e293b, #334155)",
+                borderRadius: 20, padding: "16px 20px", marginBottom: 16,
+                display: "flex", alignItems: "flex-start", gap: 12,
+                boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                animation: "fadeSlideUp 0.4s ease",
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                  background: "linear-gradient(135deg, #4F8CFF, #667eea)",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+                }}>
+                  🎓
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "#4F8CFF", marginBottom: 4 }}>Lucy</p>
+                  <p style={{ fontSize: 13, color: "#e2e8f0", lineHeight: 1.6, margin: 0 }}>{lucyIntro}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Plan days */}
+            {plan.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {plan.map((day, i) => (
+                  <DayCard key={i} day={day} index={i} />
+                ))}
+
+                {/* Summary footer */}
+                <div style={{
+                  background: "#f8fafc", borderRadius: 16, padding: "14px 20px",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  border: "1.5px solid #e2e8f0",
+                }}>
+                  <span style={{ fontSize: 13, color: "#64748b" }}>
+                    📊 {plan.length} study days · {plan.reduce((s, d) => s + d.tasks.length, 0)} tasks · {plan.reduce((s, d) => s + d.tasks.reduce((ts, t) => ts + (t.allocatedHours || 0), 0), 0)} total hours
+                  </span>
+                  <button onClick={generatePlan}
+                    style={{
+                      padding: "6px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0",
+                      background: "white", color: "#4F8CFF", fontSize: 12,
+                      fontWeight: 700, cursor: "pointer",
+                    }}>
+                    🔄 Regenerate
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Initial empty state */}
+        {!generated && !loading && (
+          <div style={{
+            background: "white", borderRadius: 20, padding: 56,
+            textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+          }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 20, margin: "0 auto 16px",
+              background: "linear-gradient(135deg, #4F8CFF, #667eea)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30,
+            }}>
+              🎓
+            </div>
+            <p style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+              Ready to build your study plan?
+            </p>
+            <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24 }}>
+              Lucy will analyze your tasks and create a smart schedule with study tips for each task.
+            </p>
+            <button onClick={generatePlan}
+              style={{
+                padding: "12px 32px", borderRadius: 14, border: "none",
+                background: "linear-gradient(135deg, #4F8CFF, #667eea)",
+                color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer",
+                boxShadow: "0 4px 16px rgba(79,140,255,0.3)",
+              }}>
+              ✨ Generate My Plan
+            </button>
+          </div>
+        )}
+
       </div>
-
-      {toast && <TaskToast task={toast} onClose={() => setToast(null)} />}
     </>
   );
 }
