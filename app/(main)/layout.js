@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import FloatingTimer from "../components/FloatingTimer";
 
 const navItems = [
+  { href: "/survey", label: "Survey", icon: "📝" },
   { href: "/dashboard",  label: "Dashboard",     icon: "🏠" },
   { href: "/lucy",       label: "Lucy AI",        icon: "🎓" },
   { href: "/tasks",      label: "Tasks",          icon: "📋" },
