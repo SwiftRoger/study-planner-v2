@@ -60,8 +60,8 @@ if (data.role === "admin") {
             onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; }}>
             <img src="/num-logo.png" alt="NUM Logo" className="w-14 h-14 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-white">AI-Based Study Planner</h1>
-          <p className="text-white/70 text-sm mt-1">National University of Management</p>
+          <h1 className="text-2xl font-bold text-white">National University of Management</h1>
+          <p className="text-white/70 text-sm mt-1">AI-Based Study Planner</p>
         </div>
 
         {/* Card */}
