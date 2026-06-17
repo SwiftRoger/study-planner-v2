@@ -22,24 +22,26 @@ export async function PATCH(req, { params }) {
     const task = await prisma.task.update({
       where: { id: parseInt(id), userId: user.id },
       data: {
-  title: body.title,
-  subject: body.subject,
-  deadline: new Date(body.deadline),
-  priority: body.priority,
-  notes: body.notes || "",
-},
+        title: body.title,
+        subject: body.subject,
+        deadline: new Date(body.deadline),
+        priority: body.priority,
+        notes: body.notes || "",
+      },
     });
     return NextResponse.json(task);
   }
 
   // Status update only
-const task = await prisma.task.update({
-  where: { id: parseInt(id), userId: user.id },
-  data: {
-    status: body.status,
-    completedAt: body.status === "completed" ? new Date() : null,
-  },
-});
+  const task = await prisma.task.update({
+    where: { id: parseInt(id), userId: user.id },
+    data: {
+      status: body.status,
+      completedAt: body.status === "completed" ? new Date() : null,
+    },
+  });
+  return NextResponse.json(task);
+}
 
 export async function DELETE(_, { params }) {
   const user = await getUser();
@@ -50,5 +52,4 @@ export async function DELETE(_, { params }) {
     where: { id: parseInt(id), userId: user.id },
   });
   return NextResponse.json({ message: "Task deleted" });
-}
 }
