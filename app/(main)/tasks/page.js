@@ -1,122 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
-const quotes = [
-  "The secret of getting ahead is getting started. — Mark Twain",
-  "Study hard, for the well is deep and our brains are shallow. — Richard Baxter",
-  "An investment in knowledge pays the best interest. — Benjamin Franklin",
-  "The more that you read, the more things you will know. — Dr. Seuss",
-  "Education is the most powerful weapon you can use to change the world. — Nelson Mandela",
-  "Success is the sum of small efforts repeated day in and day out. — Robert Collier",
-  "Believe you can and you're halfway there. — Theodore Roosevelt",
-];
+const PRIORITY = {
+  high:   { stripe: "bg-red-400",    badge: "bg-red-100 text-red-600",    dot: "#f87171" },
+  medium: { stripe: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-600", dot: "#fbbf24" },
+  low:    { stripe: "bg-green-400",  badge: "bg-green-100 text-green-600", dot: "#4ade80" },
+};
 
-// ── Lucy Briefing Card ────────────────────────────────────────
-function LucyBriefing({ language }) {
-  const [briefing, setBriefing] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Cache briefing per day so we don't call API on every refresh
-    const cacheKey = `lucy_briefing_${new Date().toDateString()}_${language}`;
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      setBriefing(cached);
-      setLoading(false);
-      return;
-    }
-
-    fetch(`/api/lucy?language=${language}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.reply) {
-          setBriefing(data.reply);
-          sessionStorage.setItem(cacheKey, data.reply);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setBriefing("Good morning! Let's make today productive. 💙");
-        setLoading(false);
-      });
-  }, [language]);
-
-  return (
-    <div style={{
-      background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
-      borderRadius: 20, padding: 20, marginBottom: 24,
-      boxShadow: "0 8px 32px rgba(79,140,255,0.15)",
-      border: "1px solid rgba(79,140,255,0.2)",
-      position: "relative", overflow: "hidden",
-    }}>
-      {/* Background glow */}
-      <div style={{
-        position: "absolute", top: -20, right: -20,
-        width: 120, height: 120, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(79,140,255,0.15) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, position: "relative" }}>
-        {/* Lucy avatar */}
-        <div style={{
-          width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-          background: "linear-gradient(135deg, #4F8CFF, #667eea)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 20, boxShadow: "0 4px 12px rgba(79,140,255,0.4)",
-        }}>
-          🎓
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#4F8CFF" }}>Lucy</span>
-            <span style={{
-              fontSize: 10, padding: "2px 8px", borderRadius: 20,
-              background: "rgba(79,140,255,0.2)", color: "#93c5fd", fontWeight: 600,
-            }}>
-              {language === "kh" ? "ការណែនាំប្រចាំថ្ងៃ" : "Daily Briefing"}
-            </span>
-          </div>
-
-          {loading ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{
-                width: 16, height: 16, border: "2px solid #4F8CFF",
-                borderTopColor: "transparent", borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-              }} />
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>
-                {language === "kh" ? "Lucy កំពុងរៀបចំ..." : "Lucy is preparing your briefing..."}
-              </span>
-            </div>
-          ) : (
-            <p style={{
-              fontSize: 13, color: "#e2e8f0", lineHeight: 1.7,
-              margin: 0, whiteSpace: "pre-wrap",
-            }}>
-              {briefing}
-            </p>
-          )}
-
-          <Link href="/lucy" style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            marginTop: 10, fontSize: 12, color: "#4F8CFF",
-            textDecoration: "none", fontWeight: 600,
-          }}>
-            {language === "kh" ? "និយាយជាមួយ Lucy →" : "Chat with Lucy →"}
-          </Link>
-        </div>
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
+function isOverdue(t) {
+  return t.status === "pending" && new Date(t.deadline) < new Date();
 }
 
-// ── Logout button ─────────────────────────────────────────────
+function daysLeft(deadline) {
+  return Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24));
+}
+
+function toDatetimeLocal(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ── Logout Button ─────────────────────────────────────────────
 function LogoutButton() {
   const router = useRouter();
   async function handleLogout() {
@@ -133,33 +40,510 @@ function LogoutButton() {
   );
 }
 
+// ── 3D Road Timeline ──────────────────────────────────────────
+function RoadTimeline({ tasks, onSelect }) {
+  const completed = useMemo(() => {
+    return tasks
+      .filter((t) => t.status === "completed")
+      // FIX 2: use completedAt instead of updatedAt (matches schema)
+      .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt))
+      .slice(0, 5);
+  }, [tasks]);
+
+  const pending = useMemo(() => {
+    return tasks
+      .filter((t) => t.status === "pending")
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+      .slice(0, 5);
+  }, [tasks]);
+
+  const dots = [
+    ...completed.map((t, i) => ({
+      task: t,
+      pct: 50 + ((i + 1) / (completed.length + 1)) * 45,
+      color: "#4ade80",
+      label: "✓",
+    })),
+    ...pending.map((t, i) => ({
+      task: t,
+      pct: 50 - ((i + 1) / (pending.length + 1)) * 45,
+      color: isOverdue(t) ? "#f87171" : "#4F8CFF",
+      label: isOverdue(t) ? "!" : "",
+    })),
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-6 h-full">
+      <h2 className="text-lg font-semibold text-slate-800 mb-1">Your Journey</h2>
+      <p className="text-xs text-slate-400 mb-4">Behind you = done · Ahead = coming up</p>
+
+      <div style={{ perspective: "700px", height: 320, position: "relative" }}>
+        <div
+          style={{
+            position: "relative",
+            height: "100%",
+            transform: "rotateX(55deg)",
+            transformStyle: "preserve-3d",
+          }}
+        >
+          {/* Road surface */}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 0,
+              bottom: 0,
+              width: 150,
+              transform: "translateX(-50%)",
+              background: "linear-gradient(to top, #1e293b, #475569)",
+              clipPath: "polygon(28% 100%, 72% 100%, 86% 0%, 14% 0%)",
+            }}
+          >
+            {/* Center dashed line */}
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 0,
+                bottom: 0,
+                width: 3,
+                transform: "translateX(-50%)",
+                background: "repeating-linear-gradient(to top, #fbbf24 0 16px, transparent 16px 32px)",
+              }}
+            />
+          </div>
+
+          {/* Horizon fog */}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: -20,
+              width: 200,
+              height: 80,
+              transform: "translateX(-50%)",
+              background: "linear-gradient(to top, transparent, #F8FAFC)",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* "Today" marker */}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 10,
+            }}
+          >
+            <div className="w-5 h-5 rounded-full bg-white border-4 border-[#4F8CFF] shadow-lg" />
+          </div>
+
+          {/* Task dots */}
+          {dots.map(({ task, pct, color, label }) => {
+            const distFromCenter = Math.abs(pct - 50) / 45;
+            const scale = 1.15 - distFromCenter * 0.6;
+            return (
+              <button
+                key={task.id}
+                onClick={() => onSelect?.(task)}
+                className="group"
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: `${pct}%`,
+                  transform: `translate(-50%, -50%) scale(${scale})`,
+                  zIndex: 5,
+                }}
+              >
+                <div
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    background: color,
+                    border: "2px solid white",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                    fontSize: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                  }}
+                >
+                  {label}
+                </div>
+                <div
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{
+                    position: "absolute",
+                    bottom: "140%",
+                    left: "50%",
+                    transform: "translateX(-50%) rotateX(-55deg)",
+                    background: "#1e293b",
+                    color: "white",
+                    fontSize: 11,
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {task.title}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-4 mt-2 text-xs text-slate-400">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> Done</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#4F8CFF] inline-block" /> Upcoming</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Overdue</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Graph (Trend / Breakdown) ────────────────────────────────
+function TaskGraph({ tasks }) {
+  const [view, setView] = useState("trend");
+
+  const trendData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const count = tasks.filter((t) => {
+        if (t.status !== "completed") return false;
+        // FIX 2: use completedAt instead of updatedAt (matches schema)
+        const done = new Date(t.completedAt || t.createdAt);
+        return done.toDateString() === d.toDateString();
+      }).length;
+      days.push({ label: d.toLocaleDateString("en-US", { weekday: "short" }), count });
+    }
+    return days;
+  }, [tasks]);
+
+  const breakdown = useMemo(() => {
+    const high = tasks.filter((t) => t.priority === "high").length;
+    const medium = tasks.filter((t) => t.priority === "medium").length;
+    const low = tasks.filter((t) => t.priority === "low").length;
+    return [
+      { label: "High", count: high, color: "bg-red-400" },
+      { label: "Medium", count: medium, color: "bg-yellow-400" },
+      { label: "Low", count: low, color: "bg-green-400" },
+    ];
+  }, [tasks]);
+
+  const maxTrend = Math.max(1, ...trendData.map((d) => d.count));
+  const maxBreakdown = Math.max(1, ...breakdown.map((b) => b.count));
+
+  const chartW = 220, chartH = 90;
+  const points = trendData.map((d, i) => {
+    const x = (i / (trendData.length - 1)) * chartW;
+    const y = chartH - (d.count / maxTrend) * (chartH - 10);
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-6 h-full">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-slate-800">Stats</h2>
+        <div className="flex gap-1 bg-[#F0F4FF] rounded-full p-1">
+          <button
+            onClick={() => setView("trend")}
+            className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+              view === "trend" ? "bg-[#4F8CFF] text-white" : "text-slate-500"
+            }`}
+          >
+            Trend
+          </button>
+          <button
+            onClick={() => setView("breakdown")}
+            className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+              view === "breakdown" ? "bg-[#4F8CFF] text-white" : "text-slate-500"
+            }`}
+          >
+            Breakdown
+          </button>
+        </div>
+      </div>
+
+      {view === "trend" ? (
+        <div>
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ height: 100 }}>
+            <polyline points={points} fill="none" stroke="#4F8CFF" strokeWidth="2.5" strokeLinecap="round" />
+            {trendData.map((d, i) => {
+              const x = (i / (trendData.length - 1)) * chartW;
+              const y = chartH - (d.count / maxTrend) * (chartH - 10);
+              return <circle key={i} cx={x} cy={y} r="3" fill="#4F8CFF" />;
+            })}
+          </svg>
+          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+            {trendData.map((d, i) => <span key={i}>{d.label}</span>)}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3 mt-2">
+          {breakdown.map((b) => (
+            <div key={b.label}>
+              <div className="flex justify-between text-xs text-slate-500 mb-1">
+                <span>{b.label}</span>
+                <span>{b.count}</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${b.color} rounded-full transition-all`}
+                  style={{ width: `${(b.count / maxBreakdown) * 100}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Task Card ──────────────────────────────────────────────
+function TaskCard({ task, onToggle, onEdit, onDelete }) {
+  const p = PRIORITY[task.priority] || PRIORITY.low;
+  const overdue = isOverdue(task);
+  const dl = daysLeft(task.deadline);
+
+  return (
+    <div className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm card-hover">
+      <div className="flex items-center gap-3">
+        <div className={`w-2 h-10 rounded-full ${p.stripe}`} />
+        <button
+          onClick={() => onToggle(task)}
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs ${
+            task.status === "completed" ? "bg-green-400 border-green-400 text-white" : "border-slate-300"
+          }`}
+        >
+          {task.status === "completed" ? "✓" : ""}
+        </button>
+        <div>
+          <p className={`font-medium text-sm ${task.status === "completed" ? "line-through text-slate-400" : "text-slate-800"}`}>
+            {task.title}
+          </p>
+          <p className="text-xs text-slate-500">{task.subject}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span
+          className={`text-xs px-3 py-1 rounded-full font-medium ${
+            task.status === "completed"
+              ? "bg-green-100 text-green-600"
+              : overdue
+              ? "bg-red-100 text-red-600"
+              : "bg-[#EBF1FF] text-[#4F8CFF]"
+          }`}
+        >
+          {task.status === "completed" ? "Done" : overdue ? `Overdue ${Math.abs(dl)}d` : dl === 0 ? "Due today" : `${dl}d left`}
+        </span>
+        <button onClick={() => onEdit(task)} className="text-slate-400 hover:text-[#4F8CFF] text-sm">✏️</button>
+        <button onClick={() => onDelete(task)} className="text-slate-400 hover:text-red-500 text-sm">🗑️</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Add/Edit Modal ────────────────────────────────────────
+function TaskFormModal({ initialTask, onClose, onSave }) {
+  const [title, setTitle] = useState(initialTask?.title || "");
+  const [subject, setSubject] = useState(initialTask?.subject || "");
+  const [deadline, setDeadline] = useState(toDatetimeLocal(initialTask?.deadline));
+  const [priority, setPriority] = useState(initialTask?.priority || "medium");
+  // FIX 3: include notes field to match schema + API
+  const [notes, setNotes] = useState(initialTask?.notes || "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({
+      id: initialTask?.id,
+      title,
+      subject,
+      deadline: new Date(deadline).toISOString(),
+      priority,
+      notes,
+    });
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">
+          {initialTask ? "Edit Task" : "Add Task"}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs text-slate-500">Title</label>
+            <input
+              value={title} onChange={(e) => setTitle(e.target.value)} required
+              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4F8CFF]"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Subject</label>
+            <input
+              value={subject} onChange={(e) => setSubject(e.target.value)} required
+              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4F8CFF]"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Deadline</label>
+            <input
+              type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} required
+              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4F8CFF]"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Priority</label>
+            <select
+              value={priority} onChange={(e) => setPriority(e.target.value)}
+              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4F8CFF]"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          {/* FIX 3: notes field */}
+          <div>
+            <label className="text-xs text-slate-500">Notes (optional)</label>
+            <textarea
+              value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4F8CFF] resize-none"
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 py-2 rounded-xl bg-[#4F8CFF] text-white text-sm font-medium disabled:opacity-60">
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Delete Confirm Modal ────────────────────────────────────
+function DeleteConfirmModal({ task, onClose, onConfirm }) {
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center" onClick={(e) => e.stopPropagation()}>
+        <p className="text-3xl mb-2">🗑️</p>
+        <h2 className="text-base font-semibold text-slate-800 mb-1">Delete this task?</h2>
+        <p className="text-sm text-slate-500 mb-5">"{task.title}" will be permanently removed.</p>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm">
+            Cancel
+          </button>
+          <button
+            disabled={deleting}
+            onClick={async () => { setDeleting(true); await onConfirm(task.id); }}
+            className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-medium disabled:opacity-60"
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
-export default function DashboardPage() {
+export default function TasksPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [language, setLanguage] = useState("en");
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [formTask, setFormTask] = useState(null);
+  const [deleteTask, setDeleteTask] = useState(null);
 
   useEffect(() => {
-    const lang = localStorage.getItem("lucyLanguage") || "en";
-    setLanguage(lang);
-
-    // Load user
-    fetch("/api/me").then(r => r.json()).then(d => {
+    fetch("/api/me").then((r) => r.json()).then((d) => {
       if (!d.user) { router.push("/login"); return; }
       setUser(d.user);
     });
-
-    // Load tasks
-    fetch("/api/tasks").then(r => {
-      if (r.status === 401) { router.push("/login"); return; }
+    fetch("/api/tasks").then((r) => {
+      if (r.status === 401) { router.push("/login"); return null; }
       return r.json();
-    }).then(data => {
-      if (data) setTasks(data);
-      setLoading(false);
-    });
+    }).then((d) => { if (d) { setTasks(d); setLoading(false); } });
   }, [router]);
+
+  const counts = useMemo(() => ({
+    all: tasks.length,
+    pending: tasks.filter((t) => t.status === "pending" && !isOverdue(t)).length,
+    overdue: tasks.filter((t) => isOverdue(t)).length,
+    completed: tasks.filter((t) => t.status === "completed").length,
+  }), [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    return tasks
+      .filter((t) => {
+        if (search && !`${t.title} ${t.subject}`.toLowerCase().includes(search.toLowerCase())) return false;
+        if (filter === "pending") return t.status === "pending" && !isOverdue(t);
+        if (filter === "overdue") return isOverdue(t);
+        if (filter === "completed") return t.status === "completed";
+        return true;
+      })
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  }, [tasks, filter, search]);
+
+  async function refreshTasks() {
+    const d = await fetch("/api/tasks").then((r) => r.json());
+    setTasks(d);
+  }
+
+  async function handleToggle(task) {
+    const newStatus = task.status === "completed" ? "pending" : "completed";
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    refreshTasks();
+  }
+
+  async function handleSave(data) {
+    if (data.id) {
+      // FIX 1: send isEdit: true so the API does a full update, not just status
+      await fetch(`/api/tasks/${data.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, isEdit: true }),
+      });
+    } else {
+      await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    }
+    setFormTask(null);
+    refreshTasks();
+  }
+
+  async function handleDelete(id) {
+    await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+    setDeleteTask(null);
+    refreshTasks();
+  }
 
   if (loading || !user) {
     return (
@@ -169,269 +553,117 @@ export default function DashboardPage() {
     );
   }
 
-  const total     = tasks.length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const pending   = tasks.filter(t => t.status === "pending").length;
-  const overdue   = tasks.filter(t => t.status === "pending" && new Date(t.deadline) < new Date()).length;
-  const percent   = total === 0 ? 0 : Math.round((completed / total) * 100);
-  const quote     = quotes[new Date().getDay() % quotes.length];
-
-  const upcoming = tasks
-    .filter(t => t.status === "pending" && new Date(t.deadline) >= new Date())
-    .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
-    .slice(0, 3);
-
-  const today = new Date();
-  const todayTasks = tasks.filter(t => {
-    const d = new Date(t.deadline);
-    return d.getFullYear() === today.getFullYear() &&
-      d.getMonth() === today.getMonth() &&
-      d.getDate() === today.getDate();
-  });
-
-  const dueSoon = tasks.filter(t => {
-    const diff = new Date(t.deadline) - new Date();
-    const hours = diff / (1000 * 60 * 60);
-    return t.status === "pending" && hours > 0 && hours <= 24;
-  });
+  const tabs = [
+    { key: "all", label: "All" },
+    { key: "pending", label: "Pending" },
+    { key: "overdue", label: "Overdue" },
+    { key: "completed", label: "Completed" },
+  ];
 
   return (
-    <div className="max-w-5xl mx-auto relative">
-
+    <div className="max-w-6xl mx-auto relative">
       {/* Background shapes */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="animate-float absolute top-20 right-20 w-32 h-32 rounded-full opacity-5"
           style={{ background: "linear-gradient(135deg, #4F8CFF, #667eea)" }} />
-        <div className="animate-float-delayed absolute top-40 left-10 w-20 h-20 rounded-full opacity-5"
-          style={{ background: "linear-gradient(135deg, #a8edea, #4F8CFF)" }} />
-        <div className="animate-float absolute bottom-40 right-40 w-24 h-24 opacity-5"
-          style={{ background: "linear-gradient(135deg, #667eea, #4F8CFF)", borderRadius: "30% 70% 70% 30% / 30% 30% 70% 70%" }} />
         <div className="animate-float-delayed absolute bottom-20 left-20 w-16 h-16 opacity-5"
           style={{ background: "linear-gradient(135deg, #4F8CFF, #a8edea)", transform: "rotate(45deg)" }} />
       </div>
 
       <div className="relative z-10">
-
         {/* Header */}
         <div className="flex items-center justify-between mb-6 card-enter">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              Hello, {user.name}! 👋
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">Let's make today productive.</p>
+            <h1 className="text-2xl font-bold text-slate-800">My Tasks</h1>
+            <p className="text-slate-500 text-sm mt-1">
+              {counts.all} tasks · {counts.overdue} overdue
+            </p>
           </div>
-          <LogoutButton />
-        </div>
-
-        {/* Lucy Briefing */}
-        <LucyBriefing language={language} />
-
-        {/* Due soon alert */}
-        {dueSoon.length > 0 && (
-          <div className="card-enter-1 mb-4 p-4 rounded-2xl border border-orange-200 flex items-center gap-3"
-            style={{ background: "linear-gradient(135deg, #fff7ed, #ffedd5)" }}>
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <p className="font-semibold text-orange-700 text-sm">Due within 24 hours!</p>
-              <p className="text-orange-600 text-xs mt-0.5">
-                {dueSoon.map(t => t.title).join(", ")} — don't forget!
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Motivational quote */}
-        <div className="card-enter-1 mb-6 p-4 rounded-2xl text-white text-sm italic text-center"
-          style={{ background: "linear-gradient(135deg, #4F8CFF 0%, #667eea 100%)" }}>
-          💡 "{quote}"
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {[
-            { label: "Total Tasks",  value: total,     color: "text-slate-800", bg: "from-slate-50 to-white",  delay: "card-enter-1" },
-            { label: "Pending",      value: pending,   color: "text-[#4F8CFF]", bg: "from-blue-50 to-white",   delay: "card-enter-2" },
-            { label: "Completed",    value: completed, color: "text-green-500", bg: "from-green-50 to-white",  delay: "card-enter-3" },
-            { label: "Overdue",      value: overdue,   color: "text-red-500",   bg: "from-red-50 to-white",    delay: "card-enter-4" },
-          ].map(stat => (
-            <div key={stat.label} className={`${stat.delay} bg-gradient-to-br ${stat.bg} rounded-2xl shadow-sm p-5 text-center card-hover`}>
-              <p className="text-slate-500 text-sm">{stat.label}</p>
-              <h2 className={`text-3xl font-bold mt-1 ${stat.color}`}>{stat.value}</h2>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6 mb-6">
-          {/* Upcoming Deadlines */}
-          <div className="md:col-span-2 bg-white rounded-2xl shadow-sm p-6 card-enter-2">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-800">Upcoming Deadlines</h2>
-              <Link href="/tasks" className="text-sm text-[#4F8CFF] hover:underline">View all →</Link>
-            </div>
-            {upcoming.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-4xl mb-2">🎉</p>
-                <p className="text-slate-400 text-sm">No upcoming tasks!</p>
-                <Link href="/lucy" className="text-sm text-[#4F8CFF] mt-2 inline-block hover:underline">
-                  Tell Lucy about your tasks →
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {upcoming.map(task => {
-                  const daysLeft = Math.ceil((new Date(task.deadline) - new Date()) / (1000 * 60 * 60 * 24));
-                  return (
-                    <div key={task.id} className="flex items-center justify-between p-4 bg-[#F0F4FF] rounded-xl card-hover">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-8 rounded-full ${
-                          task.priority === "high" ? "bg-red-400" :
-                          task.priority === "medium" ? "bg-yellow-400" : "bg-green-400"
-                        }`} />
-                        <div>
-                          <p className="font-medium text-sm text-slate-800">{task.title}</p>
-                          <p className="text-xs text-slate-500">{task.subject}</p>
-                        </div>
-                      </div>
-                      <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                        daysLeft <= 2 ? "bg-red-100 text-red-600" : "bg-[#EBF1FF] text-[#4F8CFF]"
-                      }`}>
-                        {daysLeft === 0 ? "Due today" : `${daysLeft}d left`}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Progress */}
-          <div className="bg-white rounded-2xl shadow-sm p-6 card-enter-3">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Overall Progress</h2>
-            <div className="flex flex-col items-center justify-center py-2">
-              <div className="relative w-32 h-32">
-                <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="50" fill="none" stroke="#EBF1FF" strokeWidth="12" />
-                  <circle cx="60" cy="60" r="50" fill="none"
-                    stroke="url(#grad1)" strokeWidth="12"
-                    strokeDasharray={`${2 * Math.PI * 50}`}
-                    strokeDashoffset={`${2 * Math.PI * 50 * (1 - percent / 100)}`}
-                    strokeLinecap="round"
-                    style={{ transition: "stroke-dashoffset 1s ease" }} />
-                  <defs>
-                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#4F8CFF" />
-                      <stop offset="100%" stopColor="#a8edea" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-slate-800">{percent}%</span>
-                  <span className="text-xs text-slate-400">Done</span>
-                </div>
-              </div>
-              <p className="text-sm text-slate-500 mt-3">{completed} of {total} tasks completed</p>
-            </div>
-            <div className="mt-4 space-y-2">
-              <Link href="/lucy" className="flex items-center gap-2 p-3 bg-[#F0F4FF] rounded-xl hover:bg-[#EBF1FF] transition-all card-hover">
-                <span>🎓</span>
-                <span className="text-sm font-medium text-[#4F8CFF]">Chat with Lucy</span>
-              </Link>
-              <Link href="/planner" className="flex items-center gap-2 p-3 bg-[#F0F4FF] rounded-xl hover:bg-[#EBF1FF] transition-all card-hover">
-                <span>🤖</span>
-                <span className="text-sm font-medium text-[#4F8CFF]">Generate Study Plan</span>
-              </Link>
-              <Link href="/progress" className="flex items-center gap-2 p-3 bg-[#F0F4FF] rounded-xl hover:bg-[#EBF1FF] transition-all card-hover">
-                <span>📊</span>
-                <span className="text-sm font-medium text-[#4F8CFF]">View Full Progress</span>
-              </Link>
-            </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFormTask("new")}
+              className="px-4 py-2 rounded-xl text-white text-sm font-medium"
+              style={{ background: "linear-gradient(135deg, #4F8CFF 0%, #667eea 100%)" }}
+            >
+              + Add Task
+            </button>
+            <LogoutButton />
           </div>
         </div>
 
-        {/* Study Stats Row */}
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-2xl shadow-sm p-5 card-enter-3 card-hover">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl">🎯</span>
-              <p className="text-sm text-slate-500">Completion Rate</p>
-            </div>
-            <h3 className="text-2xl font-bold text-[#4F8CFF]">{percent}%</h3>
-            <p className="text-xs text-slate-400 mt-1">of all tasks done</p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm p-5 card-enter-4 card-hover">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl">📚</span>
-              <p className="text-sm text-slate-500">High Priority</p>
-            </div>
-            <h3 className="text-2xl font-bold text-red-500">
-              {tasks.filter(t => t.priority === "high" && t.status === "pending").length}
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">tasks need attention</p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm p-5 card-enter-5 card-hover">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl">✅</span>
-              <p className="text-sm text-slate-500">Done This Week</p>
-            </div>
-            <h3 className="text-2xl font-bold text-green-500">
-              {tasks.filter(t => {
-                const d = new Date(t.createdAt);
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                return t.status === "completed" && d >= weekAgo;
-              }).length}
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">tasks completed</p>
-          </div>
+        {/* Search row */}
+        <div className="mb-6">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Search tasks by title or subject..."
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4F8CFF] bg-white"
+          />
         </div>
 
-        {/* Today's Schedule */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 card-enter-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">📅 Today's Schedule</h2>
-            <span className="text-sm text-slate-400">
-              {today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-            </span>
+        {/* Centerpiece: tabs / road / graph */}
+        <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr_280px] gap-6 mb-8">
+          {/* Filter tabs sidebar */}
+          <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={`flex-shrink-0 lg:flex-shrink text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center justify-between gap-2 ${
+                  filter === tab.key ? "bg-[#4F8CFF] text-white" : "bg-white text-slate-500 hover:bg-[#F0F4FF]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`text-xs ${filter === tab.key ? "text-white/80" : "text-slate-400"}`}>
+                  {counts[tab.key]}
+                </span>
+              </button>
+            ))}
           </div>
-          {todayTasks.length === 0 ? (
-            <div className="text-center py-6">
-              <p className="text-3xl mb-2">🎉</p>
-              <p className="text-slate-400 text-sm">No tasks due today!</p>
-              <Link href="/lucy" className="text-sm text-[#4F8CFF] mt-2 inline-block hover:underline">
-                Ask Lucy what to study today →
-              </Link>
+
+          {/* Road timeline */}
+          <RoadTimeline tasks={tasks} onSelect={(t) => setFormTask(t)} />
+
+          {/* Graph */}
+          <TaskGraph tasks={tasks} />
+        </div>
+
+        {/* Task list */}
+        <div className="space-y-3">
+          {filteredTasks.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
+              <p className="text-4xl mb-2">🎉</p>
+              <p className="text-slate-400 text-sm">No tasks match this view.</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {todayTasks.map(task => (
-                <div key={task.id} className="flex items-center justify-between p-4 bg-[#F0F4FF] rounded-xl card-hover">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-8 rounded-full ${
-                      task.priority === "high" ? "bg-red-400" :
-                      task.priority === "medium" ? "bg-yellow-400" : "bg-green-400"
-                    }`} />
-                    <div>
-                      <p className={`font-medium text-sm ${task.status === "completed" ? "line-through text-slate-400" : "text-slate-800"}`}>
-                        {task.title}
-                      </p>
-                      <p className="text-xs text-slate-500">{task.subject}</p>
-                    </div>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                    task.status === "completed" ? "bg-green-100 text-green-600" :
-                    task.priority === "high" ? "bg-red-100 text-red-600" :
-                    task.priority === "medium" ? "bg-yellow-100 text-yellow-600" :
-                    "bg-green-100 text-green-600"
-                  }`}>
-                    {task.status === "completed" ? "Done" : task.priority}
-                  </span>
-                </div>
-              ))}
-            </div>
+            filteredTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onToggle={handleToggle}
+                onEdit={(t) => setFormTask(t)}
+                onDelete={(t) => setDeleteTask(t)}
+              />
+            ))
           )}
         </div>
-
       </div>
+
+      {/* Modals */}
+      {formTask && (
+        <TaskFormModal
+          initialTask={formTask === "new" ? null : formTask}
+          onClose={() => setFormTask(null)}
+          onSave={handleSave}
+        />
+      )}
+      {deleteTask && (
+        <DeleteConfirmModal
+          task={deleteTask}
+          onClose={() => setDeleteTask(null)}
+          onConfirm={handleDelete}
+        />
+      )}
     </div>
   );
 }

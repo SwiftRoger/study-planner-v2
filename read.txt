@@ -32,4 +32,4 @@ http://localhost:3000
 
 admin account:
 admin@num.edu.kh
-admin123456
+admin123
