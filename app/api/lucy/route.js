@@ -13,7 +13,7 @@ import {
 } from "@/lib/lucy";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.1-8b-instant";
+const MODEL = "openai/gpt-oss-20b";
 
 async function getUser() {
   const cookieStore = await cookies();
