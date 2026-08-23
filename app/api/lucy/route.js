@@ -46,7 +46,7 @@ async function callGroq(messages, systemPrompt, maxTokens = 400, retries = 2) {
     }
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || "Cerebras API error");
+        if (!res.ok) throw new Error(`Cerebras API error (${res.status}): ${JSON.stringify(data)}`);
     return data.choices?.[0]?.message?.content || "";
   }
   throw new Error("Cerebras API error: rate limit exceeded after retries");
