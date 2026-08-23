@@ -12,8 +12,10 @@ import {
   detectKhmer,
 } from "@/lib/lucy";
 
-const AI_URL = "https://api.cerebras.ai/v1/chat/completions";
-const MODEL = "gpt-oss-120b";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "openai/gpt-oss-20b";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 async function getUser() {
   const cookieStore = await cookies();
@@ -22,16 +24,16 @@ async function getUser() {
   return await verifyToken(token);
 }
 
-async function callGroq(messages, systemPrompt, maxTokens = 400, retries = 2) {
+async function callProvider(url, apiKey, model, messages, systemPrompt, maxTokens, retries) {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(AI_URL, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.CEREBRAS_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         messages: [{ role: "system", content: systemPrompt }, ...messages],
         temperature: 0.75,
         max_tokens: maxTokens,
@@ -40,16 +42,30 @@ async function callGroq(messages, systemPrompt, maxTokens = 400, retries = 2) {
 
     if (res.status === 429 && attempt < retries) {
       const retryAfter = res.headers.get("retry-after");
-      const waitMs = retryAfter ? parseFloat(retryAfter) * 1000 : (attempt + 1) * 1500;
-      await new Promise(r => setTimeout(r, Math.min(waitMs, 8000)));
+      const waitMs = retryAfter ? parseFloat(retryAfter) * 1000 : (attempt + 1) * 1200;
+      await new Promise(r => setTimeout(r, Math.min(waitMs, 6000)));
       continue;
     }
 
     const data = await res.json();
-        if (!res.ok) throw new Error(`Cerebras API error (${res.status}): ${JSON.stringify(data)}`);
+    if (!res.ok) throw new Error(`${res.status}: ${JSON.stringify(data)}`);
     return data.choices?.[0]?.message?.content || "";
   }
-  throw new Error("Cerebras API error: rate limit exceeded after retries");
+  throw new Error("rate limit exceeded after retries");
+}
+
+async function callGroq(messages, systemPrompt, maxTokens = 400) {
+  try {
+    return await callProvider(GROQ_URL, process.env.GROQ_API_KEY, GROQ_MODEL, messages, systemPrompt, maxTokens, 1);
+  } catch (groqErr) {
+    console.error("Groq failed, falling back to Gemini:", groqErr.message);
+    try {
+      return await callProvider(GEMINI_URL, process.env.GEMINI_API_KEY, GEMINI_MODEL, messages, systemPrompt, maxTokens, 1);
+    } catch (geminiErr) {
+      console.error("Gemini fallback also failed:", geminiErr.message);
+      throw new Error("Both Groq and Gemini failed");
+    }
+  }
 }
 
 function bestMatch(msg, taskList) {
