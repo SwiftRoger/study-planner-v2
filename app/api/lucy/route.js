@@ -22,23 +22,34 @@ async function getUser() {
   return await verifyToken(token);
 }
 
-async function callGroq(messages, systemPrompt, maxTokens = 400) {
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      temperature: 0.75,
-      max_tokens: maxTokens,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || "Groq API error");
-  return data.choices?.[0]?.message?.content || "";
+async function callGroq(messages, systemPrompt, maxTokens = 400, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        temperature: 0.75,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    if (res.status === 429 && attempt < retries) {
+      const retryAfter = res.headers.get("retry-after");
+      const waitMs = retryAfter ? parseFloat(retryAfter) * 1000 : (attempt + 1) * 1500;
+      await new Promise(r => setTimeout(r, Math.min(waitMs, 8000)));
+      continue;
+    }
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || "Groq API error");
+    return data.choices?.[0]?.message?.content || "";
+  }
+  throw new Error("Groq API error: rate limit exceeded after retries");
 }
 
 function bestMatch(msg, taskList) {
@@ -112,7 +123,7 @@ Tasks:\n${taskList}
 Return ONLY a flat JSON array. Each object: id, title, subject, priority, allocatedHours, daysLeft, tip (max 8 words), dayNumber (starting 1, max ${hours}hrs/day).
 Example: [{"id":1,"title":"Math","subject":"Math","priority":"high","allocatedHours":2,"daysLeft":5,"tip":"Review formulas first","dayNumber":1}]
 ONLY return JSON array. No markdown. No explanation.`;
-      const raw = await callGroq([{ role: "user", content: "Generate the flat task schedule JSON now." }], planPrompt, 1000);
+      const raw = await callGroq([{ role: "user", content: "Generate the flat task schedule JSON now." }], planPrompt, 800);
       try {
         let cleaned = raw.replace(/```json|```/g, "").trim();
         const arrayMatch = cleaned.match(/\[[\s\S]*?\]/s);
