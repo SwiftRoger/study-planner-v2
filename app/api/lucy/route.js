@@ -12,8 +12,8 @@ import {
   detectKhmer,
 } from "@/lib/lucy";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "openai/gpt-oss-20b";
+const AI_URL = "https://api.cerebras.ai/v1/chat/completions";
+const MODEL = "llama-3.3-70b";
 
 async function getUser() {
   const cookieStore = await cookies();
@@ -24,11 +24,11 @@ async function getUser() {
 
 async function callGroq(messages, systemPrompt, maxTokens = 400, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(GROQ_URL, {
+    const res = await fetch(AI_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${process.env.CEREBRAS_API_KEY}`,
       },
       body: JSON.stringify({
         model: MODEL,
@@ -46,10 +46,10 @@ async function callGroq(messages, systemPrompt, maxTokens = 400, retries = 2) {
     }
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || "Groq API error");
+    if (!res.ok) throw new Error(data.error?.message || "Cerebras API error");
     return data.choices?.[0]?.message?.content || "";
   }
-  throw new Error("Groq API error: rate limit exceeded after retries");
+  throw new Error("Cerebras API error: rate limit exceeded after retries");
 }
 
 function bestMatch(msg, taskList) {
@@ -123,12 +123,23 @@ Tasks:\n${taskList}
 Return ONLY a flat JSON array. Each object: id, title, subject, priority, allocatedHours, daysLeft, tip (max 8 words), dayNumber (starting 1, max ${hours}hrs/day).
 Example: [{"id":1,"title":"Math","subject":"Math","priority":"high","allocatedHours":2,"daysLeft":5,"tip":"Review formulas first","dayNumber":1}]
 ONLY return JSON array. No markdown. No explanation.`;
-      const raw = await callGroq([{ role: "user", content: "Generate the flat task schedule JSON now." }], planPrompt, 800);
+      const raw = await callGroq([{ role: "user", content: "Generate the flat task schedule JSON now." }], planPrompt, 1400);
       try {
         let cleaned = raw.replace(/```json|```/g, "").trim();
-        const arrayMatch = cleaned.match(/\[[\s\S]*?\]/s);
+        const arrayMatch = cleaned.match(/\[[\s\S]*/);
         if (arrayMatch) cleaned = arrayMatch[0];
-        const flatTasks = JSON.parse(cleaned);
+
+        let flatTasks;
+        try {
+          flatTasks = JSON.parse(cleaned);
+        } catch {
+          const objectMatches = cleaned.match(/\{[^{}]*\}/g) || [];
+          flatTasks = objectMatches
+            .map(o => { try { return JSON.parse(o); } catch { return null; } })
+            .filter(Boolean);
+          if (flatTasks.length === 0) throw new Error("No recoverable tasks in response");
+        }
+
         const dayMap = {};
         const today = new Date();
         for (const task of flatTasks) {
@@ -142,7 +153,7 @@ ONLY return JSON array. No markdown. No explanation.`;
         const plan = Object.values(dayMap).sort((a, b) => a.day - b.day);
         return NextResponse.json({ plan });
       } catch (e) {
-        console.error("Plan parse error:", e.message);
+        console.error("Plan parse error:", e.message, "raw:", raw?.slice(0, 300));
         return NextResponse.json({ plan: [], message: "Could not generate plan, please try again." });
       }
     }
