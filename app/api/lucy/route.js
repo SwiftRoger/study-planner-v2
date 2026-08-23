@@ -13,7 +13,7 @@ import {
 } from "@/lib/lucy";
 
 const AI_URL = "https://api.cerebras.ai/v1/chat/completions";
-const MODEL = "llama-3.3-70b";
+const MODEL = "gpt-oss-120b";
 
 async function getUser() {
   const cookieStore = await cookies();
